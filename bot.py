@@ -4,8 +4,8 @@ import datetime
 from telegram import Update
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
 
-# Разрешённые пользователи (замени на ваши реальные Telegram ID)
-ALLOWED_USERS = [1241046646, 259679740]  # 
+# Разрешённые пользователи (замени на свои Telegram ID)
+ALLOWED_USERS = [1241046646, 259679740]
 
 # Категории и лимиты
 LIMITS = {
@@ -121,7 +121,7 @@ async def set_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     args = context.args
     if len(args) != 3:
-        await update.message.reply_text("Формат: /лимит категория сумма период (week/month)")
+        await update.message.reply_text("Формат: /setlimit категория сумма период (week/month)")
         return
 
     category, amount, period = args
@@ -134,7 +134,7 @@ async def set_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if period not in ("week", "month"):
             raise ValueError()
     except:
-        await update.message.reply_text("Формат: /лимит категория сумма период (week/month)")
+        await update.message.reply_text("Формат: /setlimit категория сумма период (week/month)")
         return
 
     cursor.execute("INSERT OR REPLACE INTO limits (category, amount, period) VALUES (?, ?, ?)",
@@ -143,16 +143,16 @@ async def set_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"Лимит для '{category}' установлен: {amount} € / {period}")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Бот готов к работе! Введите, например: еда 25")
+    await update.message.reply_text("Привет! Я готов вести учёт. Напиши, например: еда 25")
 
 def main():
     TOKEN = os.getenv("TOKEN")
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("остаток", show_limits))
-    app.add_handler(CommandHandler("лимиты", show_all_limits))
-    app.add_handler(CommandHandler("лимит", set_limit))
+    app.add_handler(CommandHandler("balance", show_limits))
+    app.add_handler(CommandHandler("limits", show_all_limits))
+    app.add_handler(CommandHandler("setlimit", set_limit))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense))
 
     app.run_polling()
