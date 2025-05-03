@@ -72,8 +72,7 @@ def add_expense(update, context):
 
 def show_limits(update, context):
     chat_id = update.message.chat_id
-    msg = "Остатки по категориям":
-"
+    msg = "Остатки по категориям:\n"
 
     cursor.execute("SELECT * FROM limits")
     limits = cursor.fetchall()
@@ -85,8 +84,7 @@ def show_limits(update, context):
         """, (chat_id, cat, start_date))
         spent = cursor.fetchone()[0] or 0
         remaining = limit - spent
-        msg += f"{cat.title()}: потрачено {spent:.2f} € / лимит {limit} € ({period}) → остаток {remaining:.2f} €
-"
+        msg += f"{cat.title()}: потрачено {spent:.2f} € / лимит {limit} € ({period}) → остаток {remaining:.2f} €\n"
 
     update.message.reply_text(msg)
 
@@ -96,11 +94,9 @@ def show_all_limits(update, context):
     if not rows:
         update.message.reply_text("Лимиты пока не заданы.")
         return
-    msg = "Текущие лимиты:
-"
+    msg = "Текущие лимиты:\n"
     for cat, amount, period in rows:
-        msg += f"{cat.title()}: {amount} € / {period}
-"
+        msg += f"{cat.title()}: {amount} € / {period}\n"
     update.message.reply_text(msg)
 
 def set_limit(update, context):
