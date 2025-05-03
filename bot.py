@@ -1,7 +1,11 @@
 import os
 import sqlite3
 import datetime
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters
+
+# Разрешённые пользователи (замени на ваши реальные Telegram ID)
+ALLOWED_USERS = [1241046646, 259679740]  # 
 
 # Категории и лимиты
 LIMITS = {
@@ -12,7 +16,7 @@ LIMITS = {
 }
 CATEGORIES = ["еда", "даша", "рома", "машина", "подарки", "рестораны", "кофе", "дом", "земля", "другое"]
 
-# Инициализация базы
+# База данных
 conn = sqlite3.connect("expenses.db", check_same_thread=False)
 cursor = conn.cursor()
 
@@ -48,7 +52,13 @@ def get_start_date(period):
         return today.replace(day=1)
     return today
 
-def add_expense(update, context):
+def is_allowed(user_id):
+    return user_id in ALLOWED_USERS
+
+async def add_expense(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update.effective_user.id):
+        return
+
     text = update.message.text.strip().lower()
     parts = text.split()
     if len(parts) != 2:
@@ -61,17 +71,20 @@ def add_expense(update, context):
     except ValueError:
         return
 
-    user = update.message.from_user.first_name or "пользователь"
-    chat_id = update.message.chat_id
+    user = update.effective_user.first_name or "пользователь"
+    chat_id = update.effective_chat.id
     today = datetime.date.today()
 
     cursor.execute("INSERT INTO expenses (chat_id, user, category, amount, timestamp) VALUES (?, ?, ?, ?, ?)",
                    (chat_id, user, category, amount, today))
     conn.commit()
-    update.message.reply_text(f"{user} добавил {amount} € в категорию '{category}'.")
+    await update.message.reply_text(f"{user} добавил {amount} € в категорию '{category}'.")
 
-def show_limits(update, context):
-    chat_id = update.message.chat_id
+async def show_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update.effective_user.id):
+        return
+
+    chat_id = update.effective_chat.id
     msg = "Остатки по категориям:\n"
 
     cursor.execute("SELECT * FROM limits")
@@ -86,55 +99,63 @@ def show_limits(update, context):
         remaining = limit - spent
         msg += f"{cat.title()}: потрачено {spent:.2f} € / лимит {limit} € ({period}) → остаток {remaining:.2f} €\n"
 
-    update.message.reply_text(msg)
+    await update.message.reply_text(msg)
 
-def show_all_limits(update, context):
+async def show_all_limits(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update.effective_user.id):
+        return
+
     cursor.execute("SELECT category, amount, period FROM limits")
     rows = cursor.fetchall()
     if not rows:
-        update.message.reply_text("Лимиты пока не заданы.")
+        await update.message.reply_text("Лимиты пока не заданы.")
         return
     msg = "Текущие лимиты:\n"
     for cat, amount, period in rows:
         msg += f"{cat.title()}: {amount} € / {period}\n"
-    update.message.reply_text(msg)
+    await update.message.reply_text(msg)
 
-def set_limit(update, context):
+async def set_limit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_allowed(update.effective_user.id):
+        return
+
     args = context.args
     if len(args) != 3:
-        update.message.reply_text("Формат: /лимит категория сумма период(week/month)")
+        await update.message.reply_text("Формат: /лимит категория сумма период (week/month)")
         return
 
     category, amount, period = args
     category = category.lower()
     if category not in CATEGORIES:
-        update.message.reply_text("Неизвестная категория.")
+        await update.message.reply_text("Неизвестная категория.")
         return
     try:
         amount = float(amount)
         if period not in ("week", "month"):
             raise ValueError()
     except:
-        update.message.reply_text("Формат: /лимит категория сумма период(week/month)")
+        await update.message.reply_text("Формат: /лимит категория сумма период (week/month)")
         return
 
     cursor.execute("INSERT OR REPLACE INTO limits (category, amount, period) VALUES (?, ?, ?)",
                    (category, amount, period))
     conn.commit()
-    update.message.reply_text(f"Лимит для '{category}' установлен: {amount} € / {period}")
+    await update.message.reply_text(f"Лимит для '{category}' установлен: {amount} € / {period}")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("Бот готов к работе! Введите, например: еда 25")
 
 def main():
     TOKEN = os.getenv("TOKEN")
-    updater = Updater(TOKEN, use_context=True)
-    dp = updater.dispatcher
+    app = ApplicationBuilder().token(TOKEN).build()
 
-    dp.add_handler(CommandHandler("остаток", show_limits))
-    dp.add_handler(CommandHandler("лимиты", show_all_limits))
-    dp.add_handler(CommandHandler("лимит", set_limit, pass_args=True))
-    dp.add_handler(MessageHandler(Filters.text & ~Filters.command, add_expense))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("остаток", show_limits))
+    app.add_handler(CommandHandler("лимиты", show_all_limits))
+    app.add_handler(CommandHandler("лимит", set_limit))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, add_expense))
 
-    updater.start_polling()
-    updater.idle()
+    app.run_polling()
 
 if __name__ == "__main__":
     main()
