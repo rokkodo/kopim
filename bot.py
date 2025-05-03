@@ -72,7 +72,7 @@ def add_expense(update, context):
 
 def show_limits(update, context):
     chat_id = update.message.chat_id
-    msg = "Остатки по категориям:
+    msg = "Остатки по категориям":
 "
 
     cursor.execute("SELECT * FROM limits")
